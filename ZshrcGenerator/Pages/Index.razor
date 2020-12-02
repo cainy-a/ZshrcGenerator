@@ -1,0 +1,103 @@
+﻿@page "/"
+@inject IJSRuntime js
+
+<h1 class="ui header">.zshrc Generator</h1>
+<p>
+	This tool generates .zshrc files for zsh, using oh-my-zsh for themes and plugins.
+</p>
+
+<h2>Step 1: Choose theme</h2>
+<select class="ui dropdown" @onchange="d => { ChooseThemeDropDown(d.Value.ToString()); }">
+	<option value="">Choose a theme</option>
+	<option value="0">Normal (eastwood)</option>
+	<option value="1">Powerline (zsh2000)</option>
+	<option value="2">Custom</option>
+</select>
+
+@switch (theme)
+{
+	case Themes.Normal:
+		<p>
+			You have chosen the normal theme, which is <a target="_blank" href="//github.com/ohmyzsh/ohmyzsh/wiki/Themes#eastwood">eastwood</a>.
+		</p>
+		break;
+	case Themes.Powerline:
+		<p>
+			You have chosen the Powerline theme, which is <a target="_blank" href="//github.com/maverick9000/zsh2000#zsh2000">zsh2000</a>.
+		</p>
+		<p>
+			IMPORTANT: zsh2000 supports showing information from RVM (Ruby Version Manager).
+			If RVM is not installed, this will cause errors. To prevent this, either install RVM or keep the below checkbox unchecked, which disables RVM functionality.
+		</p>
+		<div class="ui checkbox">
+			<input type="checkbox" checked="@zsh2000Rvm" name="zsh2000-rvm-checkbox" @onchange="c => {Zsh2000Checkbox(c.Value.ToString());}">
+			<label>Enable RVM functionality</label>
+		</div>
+		if (zsh2000Rvm)
+		{
+			<div class="ui warning message" style="display: flex">
+				<i class="ui info circle icon"></i>
+				<div class="header">Make sure you have RVM installed!</div>
+			</div>
+		}
+		break;
+	case Themes.Custom:
+		<p>
+			Please enter the DIRECT link to a .zsh-theme file:
+		</p>
+		<div class="ui input">
+			<input type="text" value="@customThemeUrl" placeholder="Enter a link..." @onchange="i => {CustomThemeInput(i.Value.ToString());}"/>
+		</div>
+		break;
+	case null:
+		break;
+}
+
+
+
+@code
+{
+	private Themes? theme;
+	private bool zsh2000Rvm;
+	private string customThemeUrl;
+
+	protected override void OnAfterRender(bool firstRender)
+	{
+		if (firstRender)
+		{
+			js.InvokeVoidAsync("initDropdowns");
+		}
+	}
+
+	private void ChooseThemeDropDown(string value)
+	{
+		if (string.IsNullOrEmpty(value))
+			theme = null;
+		else
+			switch (value)
+			{
+				case "0":
+					theme = Themes.Normal;
+					break;
+				case "1":
+					theme = Themes.Powerline;
+					break;
+				case "2":
+					theme = Themes.Custom;
+					break;
+				default:
+					theme = null;
+					break;
+			}
+	}
+
+	private void Zsh2000Checkbox(string value) => bool.TryParse(value, out zsh2000Rvm);
+	private void CustomThemeInput(string value) => customThemeUrl = value;
+
+	enum Themes
+	{
+		Normal,
+		Powerline,
+		Custom
+	}
+}
