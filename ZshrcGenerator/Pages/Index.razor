@@ -1,7 +1,5 @@
 ﻿@page "/"
-@using System.Security.Cryptography
-@using System.Net.NetworkInformation
-@using System.Threading
+@using Microsoft.Extensions.FileSystemGlobbing.Internal.PathSegments
 @inject IJSRuntime Js
 
 <h1 class="ui header">.zshrc Generator</h1>
@@ -33,14 +31,17 @@
 			If RVM is not installed, this will cause errors. To prevent this, either install RVM or keep the below checkbox unchecked, which disables RVM functionality.
 		</p>
 		<div class="ui checkbox">
-			<input type="checkbox" checked="@_zsh2000Rvm" name="zsh2000-rvm-checkbox" @onchange="c => {Zsh2000Checkbox(c.Value.ToString());}">
+			<input type="checkbox" checked="@_zsh2000Rvm" name="zsh2000-rvm-checkbox" @onchange="c => { Zsh2000Checkbox(c.Value.ToString()); }">
 			<label>Enable RVM functionality</label>
 		</div>
 		if (_zsh2000Rvm)
 		{
-			<div class="ui warning message" style="display: flex">
+			<div class="ui warning icon message">
 				<i class="ui info circle icon"></i>
-				<div class="header">Make sure you have RVM installed!</div>
+				<div class="content">
+					<div class="header">Make sure you have RVM installed!</div>
+					<p>If you enable this and don't have Ruby Version manager, the prompt will throw an error every single time it renders.</p>
+				</div>
 			</div>
 		}
 		break;
@@ -49,14 +50,14 @@
 			Please enter the DIRECT link to a .zsh-theme file:
 		</p>
 		<div class="ui input">
-			<input type="text" value="@_customThemeUrl" placeholder="Enter a link..." @onchange="i => {CustomThemeInput(i.Value.ToString());}" />
+			<input type="text" value="@_customThemeUrl" placeholder="Enter a link..." @onchange="i => { CustomThemeInput(i.Value.ToString()); }">
 		</div>
 		break;
 	case null:
 		break;
 }
 
-@if (_progress >= 1)
+@if (_themeChosen)
 {
 	<h2>Step 2: Choose Plugins</h2>
 	<p>
@@ -77,49 +78,320 @@
 				<tr>
 					<td>@plugin.Name</td>
 					<td>@(plugin.BuiltIn ? "Yes" : "No")</td>
-					<td><a target="_blank" href="@plugin.GithubLink">@plugin.GithubLink</a></td>
 					<td>
-						<button class="ui button" @onclick="() => {_plugins.Remove(plugin);}">Remove</button>
+						<a target="_blank" href="@plugin.GithubLink">@plugin.GithubLink</a>
+					</td>
+					<td>
+						<button class="ui button" @onclick="() => { _plugins.Remove(plugin); }">Remove</button>
 					</td>
 				</tr>
 			}
 		</tbody>
 	</table>
 	<div class="ui input">
-		<input type="text" name="pluginName" placeholder="Plugin Name" @onchange="i => {_newPluginName = i.Value.ToString();}" />
+		<input type="text" name="pluginName" placeholder="Plugin Name" @onchange="i => { _newPluginName = i.Value.ToString(); }">
 	</div>
 	<div class="ui input">
-		<input type="text" name="githubLink" placeholder="Plugin Name" @onchange="i => {_newPluginLink = i.Value.ToString();}" />
+		<input type="text" name="githubLink" placeholder="Plugin Link" @onchange="i => { _newPluginLink = i.Value.ToString(); }">
 	</div>
-	<button class="ui button" @onclick="() => {_plugins.Add(new Plugin(_newPluginName, string.IsNullOrEmpty(_newPluginLink), _newPluginLink));}">Add plugin</button>
-	<p>Leave the github link empty for a built in theme</p>
+	<button class="ui button" @onclick="() => { _plugins.Add(new Plugin(_newPluginName, string.IsNullOrEmpty(_newPluginLink), _newPluginLink)); }">
+		Add plugin
+	</button>
+	<p>
+		Leave the github link empty for a built in theme
+	</p>
 
 	<p>
-		The <code>git</code> plugin adds nice features for git, such as tab completion.<br/>
-		The <code>zsh-syntax-highlighting</code> plugin is very self-explanatory tbh.<br/>
-		The <code>zsh-autosuggestions</code> lets you get to your commonly used commands quickly with the right-arrow key.<br/>
+		The <code>git</code> plugin adds nice features for git, such as tab completion.<br />
+		The <code> zsh-syntax-highlighting </code> plugin is very self -explanatory tbh.<br />
+		The <code>zsh-autosuggestions</code> lets you get to your commonly used commands quickly with the right-arrow key.<br />
 		The <code>zsh-256color</code> plugin enables 256 colour support in zsh.
 	</p>
 
-	<h2>Step 3: Get your final output!</h2>
+	<h2>Step 3: Choose some aliases</h2>
+	<table class="ui celled table">
+		<thead>
+			<tr>
+				<th>Key</th>
+				<th>Replacement</th>
+				<th>Is Suffix</th>
+				<th>Is Function</th>
+				<th>Remove Button</th>
+			</tr>
+		</thead>
+		<tbody>
+			@foreach (var item in _aliases)
+			{
+				<tr>
+					<td>@item.Key</td>
+					<td>@item.Replacement</td>
+					<td>@(item.Suffix ? "Yes" : "No")</td>
+					<td>@(item.Function ? "Yes" : "No")</td>
+					<td>
+						<button class="ui button" @onclick="() => { _aliases.Remove(item); }">Remove</button>
+					</td>
+				</tr>
+			}
+		</tbody>
+	</table>
+
+	<div style="margin-bottom: 1rem">
+		<button class="ui button" @onclick="() => { _aliases.Clear(); }">Clear List</button>
+		<div class="ui input">
+			<input type="text" name="cygwinUsername" placeholder="Windows Username" @onchange="i => { _cygwinUsername = i.Value.ToString(); }">
+		</div>
+		<button class="ui button" @onclick="() => { _aliases = _cygwinDefaultAliases; }">Use Cygwin preset</button>
+	</div>
+
+	<div>
+		<div class="ui input">
+			<input type="text" name="aliasKey" placeholder="Alias Key" @onchange="i => { _newAlias.Key = i.Value.ToString(); }">
+		</div>
+		<div class="ui input">
+			<input type="text" name="aliasReplacement" placeholder="Alias Replacement" @onchange="i => { _newAlias.Replacement = i.Value.ToString(); }">
+		</div>
+		<button class="ui button" @onclick="() => { _aliases.Add(_newAlias); }">Add Alias</button>
+	</div>
+
+
+	<h2>Step 4: Get your home directory</h2>
+	<p>
+		Please enter the output of the following command: <code>(cd && pwd)</code> (brackets included)
+	</p>
+	<div class="ui input">
+		<input type="text" name="homeDir" placeholder="Home Directory" @onchange="i => { _homeDir = i.Value.ToString(); }">
+	</div>
+
+	if (!string.IsNullOrWhiteSpace(_homeDir))
+	{
+		<h2>Step 5: Get your output!</h2>
+		<p>This requires wget, git, and a text editor of your choice (nano is highly recommended). If you don't have them, please install them.</p>
+		<div class="ui warning icon message">
+			<i class="ui info circle icon"></i>
+			<div class="content">
+				<div class="header">Make sure you run this as a script, don't copy this into your .zshrc</div>
+				<p>Copy this output into some other script and then run it. Alternatively copypaste it into zsh line-by-line.</p>
+			</div>
+		</div>
+
+		<div class="ui fluid card" style="-moz-filter: invert(85%); -webkit-filter: invert(85%); filter: invert(85%)">
+			<div class="content">
+				<div class="description">
+					<code style="font-family: 'Jetbrains Mono', monospace">
+						@foreach (var line in _outputScript)
+						{
+							@line<br style="margin-bottom: 0.5rem" />
+						}
+					</code>
+				</div>
+			</div>
+		</div>
+
+		<div class="ui warning icon message">
+			<i class="ui info circle icon"></i>
+			<div class="content">
+				<div class="header">This bit, on the other hand, <em>IS</em> your .zshrc</div>
+				<p>Copy this output into ~/.zshrc using the text editor of your choice.</p>
+			</div>
+		</div>
+		<div class="ui fluid card" style="-moz-filter: invert(85%); -webkit-filter: invert(85%); filter: invert(85%)">
+			<div class="content">
+				<div class="description">
+					<code style="font-family: 'Jetbrains Mono', monospace">
+						@foreach (var line in _outputRcfile)
+						{
+							@line<br style="margin-bottom: 0.5rem" />
+						}
+					</code>
+				</div>
+			</div>
+		</div>
+	}
 }
 
 
 @code
 {
-	private Themes? _theme = null;
-	private bool _zsh2000Rvm = false;
+	private Themes? _theme;
+	private bool _zsh2000Rvm;
 	private string _customThemeUrl = string.Empty;
-	private List<Plugin> _plugins = new List<Plugin>
+
+	private readonly List<Plugin> _plugins = new List<Plugin>
 {
-		new Plugin("git", true, ""),
-		new Plugin("zsh-syntax-highlighting", false, "https://github.com/zsh-users/zsh-syntax-highlighting"),
-		new Plugin("zsh-autosuggestions", false, "https://github.com/zsh-users/zsh-autosuggestions"),
-		new Plugin("zsh-256color", false, "https://github.com/chrissicool/zsh-256color")
+		new Plugin("git",
+			true, ""),
+		new Plugin("zsh-syntax-highlighting",
+			false, "https://github.com/zsh-users/zsh-syntax-highlighting"),
+		new Plugin("zsh-autosuggestions",
+			false, "https://github.com/zsh-users/zsh-autosuggestions"),
+		new Plugin("zsh-256color",
+			false, "https://github.com/chrissicool/zsh-256color")
 	};
-	private int _progress = 0;
+
+	private bool _themeChosen;
 	private string _newPluginName;
 	private string _newPluginLink;
+	private List<Alias> _aliases = new List<Alias>();
+	private readonly Alias _newAlias = new Alias(string.Empty, string.Empty);
+
+	private List<Alias> _cygwinDefaultAliases => new List<Alias>
+{
+		new Alias("winhome",
+			$"/cygdrive/c/Users/{_cygwinUsername}"),
+		new Alias(".exe",
+			string.Empty, true),
+		new Alias("python",
+			"python3")
+	};
+
+	private string _cygwinUsername;
+
+	private string _homeDir;
+
+	private string[] _outputScript
+	{
+		get
+		{
+			var working = new List<string>
+	{
+				"cd",
+				"sh -c \"$(wget https://raw.github.com/ohmyzsh/ohmyzsh/master/tools/install.sh -O -)\"",
+				"mv .zshrc .zshrc-ohmyzsh-default",
+				"cd $ZSH_CUSTOM/plugins/"
+			};
+			working.AddRange(from p in _plugins where !p.BuiltIn select $"git clone {p.GithubLink}");
+			if (_theme == Themes.Custom)
+			{
+				working.Add("cd $ZSH_CUSTOM/themes/");
+				working.Add($"wget {_customThemeUrl}");
+				return working.ToArray();
+			}
+			working.Add("cd");
+			return working.ToArray();
+		}
+	}
+
+	private string[] _outputRcfile
+	{
+		get
+		{
+			var working = new List<string>
+			{
+				"# If you come from bash you might have to change your $PATH.",
+				"# export PATH=$HOME/bin:/usr/local/bin:$PATH",
+				"",
+				"# Path to your oh-my-zsh installation.",
+				$"export ZSH=\"{_homeDir}/.oh-my-zsh\"",
+				"",
+				$"# stop zsh2000 throwing RVM errors{(_zsh2000Rvm ? ", re-enabled by user while generating" : "")}",
+				$"{(_zsh2000Rvm ? "# " : "")}export ZSH_2000_DISABLE_RVM=\'true\'",
+				"",
+				"# Set name of the theme to load --- if set to \"random\", it will",
+				"# load a random theme each time oh-my-zsh is loaded, in which case,",
+				"# to know which specific one was loaded, run: echo $RANDOM_THEME",
+				"# See https://github.com/ohmyzsh/ohmyzsh/wiki/Themes",
+				$"ZSH_THEME=\"{(_theme == Themes.Normal ? "eastwood" : _theme == Themes.Powerline ? "zsh2000" : _customThemeUrl.Split('/').Last())}\"",
+				"",
+				"# Set list of themes to pick from when loading at random",
+				"# Setting this variable when ZSH_THEME=random will cause zsh to load",
+				"# a theme from this variable instead of looking in $ZSH/themes/",
+				"# If set to an empty array, this variable will have no effect.",
+				"# ZSH_THEME_RANDOM_CANDIDATES=( \"robbyrussell\" \"agnoster\" )",
+				"",
+				"# Uncomment the following line to use case-sensitive completion.",
+				"# CASE_SENSITIVE=\"true\"",
+				"",
+				"# Uncomment the following line to use hyphen-insensitive completion.",
+				"# Case-sensitive completion must be off. _ and - will be interchangeable.",
+				"# HYPHEN_INSENSITIVE=\"true\"",
+				"",
+				"# Uncomment the following line to disable bi-weekly auto-update checks.",
+				"# DISABLE_AUTO_UPDATE=\"true\"",
+				"",
+				"# Uncomment the following line to automatically update without prompting.",
+				"# DISABLE_UPDATE_PROMPT=\"true\"",
+				"",
+				"# Uncomment the following line to change how often to auto-update (in days).",
+				"# export UPDATE_ZSH_DAYS=13",
+				"",
+				"# Uncomment the following line if pasting URLs and other text is messed up.",
+				"# DISABLE_MAGIC_FUNCTIONS=\"true\"",
+				"",
+				"# Uncomment the following line to disable colors in ls.",
+				"# DISABLE_LS_COLORS=\"true\"",
+				"",
+				"# Uncomment the following line to disable auto-setting terminal title.",
+				"# DISABLE_AUTO_TITLE=\"true\"",
+				"",
+				"# Uncomment the following line to enable command auto-correction.",
+				"# ENABLE_CORRECTION=\"true\"",
+				"",
+				"# Uncomment the following line to display red dots whilst waiting for completion.",
+				"# COMPLETION_WAITING_DOTS=\"true\"",
+				"",
+				"# Uncomment the following line if you want to disable marking untracked files",
+				"# under VCS as dirty. This makes repository status check for large repositories",
+				"# much, much faster.",
+				"# DISABLE_UNTRACKED_FILES_DIRTY=\"true\"",
+				"",
+				"# Uncomment the following line if you want to change the command execution time",
+				"# stamp shown in the history command output.",
+				"# You can set one of the optional three formats:",
+				"# \"mm/dd/yyyy\"|\"dd.mm.yyyy\"|\"yyyy-mm-dd\"",
+				"# or set a custom format using the strftime function format specifications,",
+				"# see \'man strftime\' for details.",
+				"# HIST_STAMPS=\"mm/dd/yyyy\"",
+				"",
+				"# Would you like to use another custom folder than $ZSH/custom?",
+				"# ZSH_CUSTOM=/path/to/new-custom-folder",
+				"",
+				"# Which plugins would you like to load?",
+				"# Standard plugins can be found in $ZSH/plugins/",
+				"# Custom plugins may be added to $ZSH_CUSTOM/plugins/",
+				"# Example format: plugins=(rails git textmate ruby lighthouse)",
+				"# Add wisely, as too many plugins slow down shell startup.",
+				$"plugins=({string.Join(' ', from p in _plugins select p.Name)})",
+				"",
+				"source $ZSH/oh-my-zsh.sh",
+				"",
+				"# User configuration",
+				"",
+				"# export MANPATH=\"/usr/local/man:$MANPATH\"",
+				"",
+				"# You may need to manually set your language environment",
+				"# export LANG=en_US.UTF-8",
+				"",
+				"# Preferred editor for local and remote sessions",
+				"# if [[ -n $SSH_CONNECTION ]]; then",
+				"#   export EDITOR=\'vim\'",
+				"# else",
+				"#   export EDITOR=\'mvim\'",
+				"# fi",
+				"",
+				"# Compilation flags",
+				"# export ARCHFLAGS=\"-arch x86_64\"",
+				"",
+				"# Set personal aliases, overriding those provided by oh-my-zsh libs,",
+				"# plugins, and themes. Aliases can be placed here, though oh-my-zsh",
+				"# users are encouraged to define aliases within the ZSH_CUSTOM folder.",
+				"# For a full list of active aliases, run `alias`.",
+				"#",
+				"# Example aliases",
+				"# alias zshconfig=\"mate ~/.zshrc\"",
+				"# alias ohmyzsh=\"mate ~/.oh-my-zsh\""
+			};
+			if (_aliases.Any())
+			{
+				working.Add("");
+				working.Add("# Aliases added by user while generating");
+				foreach (var a in _aliases)
+					if (a.Suffix) working.Add($"alias -s {a.Key}=\"{a.Replacement}\"");
+					else if (a.Function) working.Add($"{a.Key} () {{\n{a.Replacement}\n}}");
+					else working.Add($"alias {a.Key}=\"{a.Replacement}\"");
+			}
+			return working.ToArray();
+		}
+	}
 
 	protected override void OnAfterRender(bool firstRender)
 	{
@@ -138,28 +410,32 @@
 			{
 				case "0":
 					_theme = Themes.Normal;
-					if (_progress < 1) _progress = 1;
+					_themeChosen = true;
 					break;
 				case "1":
 					_theme = Themes.Powerline;
-					if (_progress < 1) _progress = 1;
+					_themeChosen = true;
 					break;
 				case "2":
 					_theme = Themes.Custom;
-					_progress = !string.IsNullOrEmpty(_customThemeUrl) ? 1 : 0;
+					_themeChosen = !string.IsNullOrEmpty(_customThemeUrl);
 					break;
 				default:
 					_theme = null;
-					_progress = 0;
+					_themeChosen = false;
 					break;
 			}
 	}
 
-	private void Zsh2000Checkbox(string value) => bool.TryParse(value, out _zsh2000Rvm);
+	private void Zsh2000Checkbox(string value)
+	{
+		bool.TryParse(value, out _zsh2000Rvm);
+	}
+
 	private void CustomThemeInput(string value)
 	{
 		_customThemeUrl = value;
-		_progress = !string.IsNullOrEmpty(_customThemeUrl) ? 1 : 0;
+		_themeChosen = !string.IsNullOrEmpty(_customThemeUrl);
 	}
 
 	enum Themes
